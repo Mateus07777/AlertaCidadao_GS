@@ -1,0 +1,15 @@
+﻿@AlertaCidadao_HostAddress = http://localhost:5226
+
+### Verificar disponibilidade da API
+GET {{AlertaCidadao_HostAddress}}/health/live
+Accept: application/json
+
+### Consultar alertas meteorológicos externos
+GET {{AlertaCidadao_HostAddress}}/api/alertas-oficiais?pagina=1&tamanhoPagina=20
+Accept: application/json
+
+### Cadastrar cidadão
+POST {{AlertaCidadao_HostAddress}}/api/autenticacao/cadastro
+Content-Type: application/json
+
+{"nome":"Ana Silva","email":"ana@example.com","senha":"senha-segura-123","municipio":"Campinas","codigoIbgeMunicipio":3509502,"bairro":"Centro","cep":"13010-000"}

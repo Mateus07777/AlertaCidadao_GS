@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="AlertaCidadao/AlertaCidadao.csproj" />
+  <Project Path="AlertaCidadao.Tests/AlertaCidadao.Tests.csproj" />
+</Solution>
