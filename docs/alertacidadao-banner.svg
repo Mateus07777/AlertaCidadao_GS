@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title description">
+  <title id="title">AlertaCidadão — riscos urbanos sob monitoramento</title>
+  <desc id="description">Banner azul-marinho com símbolo de proteção e localização para o sistema AlertaCidadão.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#071a2d"/>
+      <stop offset="1" stop-color="#123b59"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#44d7b6"/>
+      <stop offset="1" stop-color="#52a7ff"/>
+    </linearGradient>
+    <pattern id="grid" width="42" height="42" patternUnits="userSpaceOnUse">
+      <path d="M42 0H0V42" fill="none" stroke="#b9dcf2" stroke-opacity=".07"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="360" rx="28" fill="url(#background)"/>
+  <rect width="1200" height="360" rx="28" fill="url(#grid)"/>
+  <circle cx="1030" cy="170" r="205" fill="#46d7b6" opacity=".07"/>
+  <circle cx="1090" cy="85" r="120" fill="#52a7ff" opacity=".08"/>
+  <g transform="translate(820 72)">
+    <path d="M145 0 255 42v78c0 77-45 129-110 162C80 249 35 197 35 120V42Z" fill="url(#accent)" opacity=".95"/>
+    <path d="M145 22 235 56v64c0 61-34 104-90 135-56-31-90-74-90-135V56Z" fill="#09253b"/>
+    <path d="M145 61c-31 0-56 25-56 56 0 42 56 96 56 96s56-54 56-96c0-31-25-56-56-56Zm0 77a21 21 0 1 1 0-42 21 21 0 0 1 0 42Z" fill="#56d9bd"/>
+    <path d="M67 229h156" stroke="#8de8d3" stroke-width="5" stroke-linecap="round" opacity=".7"/>
+  </g>
+  <text x="76" y="91" fill="#8de8d3" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700" letter-spacing="4">CIVICSHIELD TECH · FIAP GLOBAL SOLUTION 2026/2</text>
+  <text x="72" y="174" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="62" font-weight="750">AlertaCidadão</text>
+  <text x="76" y="218" fill="#c8d9e7" font-family="Segoe UI, Arial, sans-serif" font-size="24">Riscos urbanos, informação confiável e prevenção local.</text>
+  <rect x="76" y="265" width="198" height="42" rx="21" fill="#163c54" stroke="#56d9bd" stroke-opacity=".55"/>
+  <circle cx="98" cy="286" r="6" fill="#56d9bd"/>
+  <text x="116" y="292" fill="#e5f4f5" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="600">API ASP.NET CORE</text>
+</svg>

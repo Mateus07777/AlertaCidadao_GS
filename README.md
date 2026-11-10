@@ -1,54 +1,236 @@
-# AlertaCidadão
+<div align="center">
+  <img src="docs/alertacidadao-banner.svg" alt="AlertaCidadão — Riscos urbanos, informação confiável e prevenção local" width="100%" />
 
-API para registro de ocorrências urbanas e consulta de alertas meteorológicos externos, com notificações preventivas persistidas. Alertas de terceiros permanecem distintos de ocorrências confirmadas por cidadãos.
+  <br />
 
-## Requisitos e execução
+  <a href="https://dotnet.microsoft.com/"><img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white" /></a>
+  <a href="https://learn.microsoft.com/aspnet/core/"><img alt="ASP.NET Core Minimal API" src="https://img.shields.io/badge/ASP.NET_Core-Minimal_API-512BD4?logo=dotnet&logoColor=white" /></a>
+  <a href="https://www.mysql.com/"><img alt="MySQL 8.4" src="https://img.shields.io/badge/MySQL-8.4-4479A1?logo=mysql&logoColor=white" /></a>
+  <a href="https://www.docker.com/"><img alt="Docker Compose" src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white" /></a>
+  <a href="https://xunit.net/"><img alt="xUnit" src="https://img.shields.io/badge/Testes-xUnit-5B3A9D" /></a>
 
-- .NET SDK 10.0; MySQL 8.4 (ou Docker Desktop com Compose).
-- Na raiz: copie `.env.example` para `.env`, substitua os valores de exemplo por credenciais locais fortes e execute `docker compose up --build`. O Compose falha se as variáveis obrigatórias não estiverem definidas.
-- API: `http://localhost:8080`; Swagger: `http://localhost:8080/swagger`; liveness: `/health/live`; readiness/MySQL: `/health/ready`.
-- O volume MySQL recebe `docs/schema.sql` na primeira inicialização. Para criar a estrutura manualmente, conecte-se ao MySQL e execute esse arquivo. O script cria `alerta_cidadao` e todas as tabelas.
-- Para rodar a API localmente, inicie MySQL e execute `dotnet run --project AlertaCidadao`. Configure `ConnectionStrings__Default` e `Jwt__SigningKey` no ambiente; o .NET não carrega automaticamente o arquivo `.env` fora do Docker Compose.
+  <p><strong>API para registrar ocorrências urbanas e acompanhar alertas meteorológicos externos.</strong></p>
+</div>
 
-Variáveis principais: `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `JWT_SIGNING_KEY`, `JWT_EXPIRY_MINUTES`, `MONITORING_INTERVAL_MINUTES`, `RATE_LIMIT_PERMIT_LIMIT` e `RATE_LIMIT_WINDOW_MINUTES`. Não use credenciais reais versionadas.
+---
 
-## API
+## Navegação
 
-Grupos: `/api/autenticacao`, `/api/cidadaos`, `/api/ocorrencias`, `/api/alertas-oficiais`, `/api/notificacoes` e `/api/execucoes-monitoramento`. Use `pagina` e `tamanhoPagina` nas listas. Cadastro e acesso são públicos; as demais rotas requerem token JWT Bearer, exceto consulta pública de alertas meteorológicos. Os contratos JSON utilizam nomes de campos em português.
+[Visão geral](#visão-geral) · [Como funciona](#como-funciona) · [Tecnologias](#tecnologias) · [Executar](#executar-com-docker) · [API](#rotas-da-api) · [Autenticação](#autenticação) · [Monitoramento](#monitoramento-automático) · [Testes](#testes) · [Estrutura](#estrutura-do-projeto)
 
-Exemplo de cadastro:
+## Visão geral
+
+O **AlertaCidadão** aproxima informações meteorológicas e relatos de quem vive na cidade. Cidadãos podem registrar situações como alagamentos; a API também consulta alertas publicados pelo RadarMeteorológico e registra notificações preventivas para cidadãos da região compatível.
+
+O sistema mantém esses conceitos separados: **alerta externo é uma informação recebida de um serviço de terceiros; ocorrência é um relato registrado por um cidadão**. Um alerta não confirma que um evento aconteceu em determinado endereço.
+
+### O que a API oferece
+
+- Cadastro e acesso de cidadãos com token JWT.
+- Registro e acompanhamento de ocorrências urbanas.
+- Consulta de alertas meteorológicos externos e sincronização periódica.
+- Notificações preventivas persistidas no MySQL, sem envio por SMS, e-mail, WhatsApp ou push.
+- Deduplicação de alertas e idempotência persistente na criação de ocorrências.
+- Histórico das execuções do monitoramento.
+- Documentação interativa, limitação de chamadas e verificações de saúde.
+
+## Como funciona
+
+```mermaid
+flowchart LR
+    C["Cidadão"] -->|"registra ocorrência"| API["API AlertaCidadão"]
+    API --> DB[("MySQL")]
+    JOB["Monitoramento a cada 10 min"] -->|"consulta alertas SP"| RADAR["RadarMeteorológico"]
+    RADAR -->|"alertas externos"| JOB
+    JOB -->|"deduplica e atualiza"| DB
+    JOB -->|"código IBGE compatível"| N["Notificação preventiva"]
+    N --> DB
+```
+
+## Tecnologias
+
+| Área | Tecnologia |
+|---|---|
+| API | C# e ASP.NET Core 10 com Minimal APIs |
+| Persistência | Entity Framework Core 10 e MySQL 8.4 |
+| Provider MySQL | `MySql.EntityFrameworkCore` 10.0.12 |
+| Integração externa | `HttpClient` com `IHttpClientFactory` |
+| Segurança | JWT Bearer e hashing de senhas do ASP.NET Core Identity |
+| Documentação | Swagger e OpenAPI |
+| Execução local | Docker e Docker Compose |
+| Testes | xUnit |
+
+## Executar com Docker
+
+### Pré-requisitos
+
+- Docker Desktop com Docker Compose.
+- Git, se for clonar o repositório.
+
+### Subir a aplicação
+
+Na pasta do repositório, copie o arquivo de exemplo e ajuste as credenciais locais:
+
+```bash
+cp .env.example .env
+```
+
+No PowerShell, use `Copy-Item .env.example .env`. Edite `.env` e defina senhas locais fortes e uma chave JWT aleatória com pelo menos 32 bytes. O `.env` não deve ser enviado ao repositório.
+
+Inicie os serviços:
+
+```bash
+docker compose up --build -d
+```
+
+O Compose inicia o MySQL e aguarda a verificação de saúde TCP antes de iniciar a API. O script `docs/schema.sql` é aplicado automaticamente quando o volume do MySQL é inicializado pela primeira vez.
+
+| Serviço | Endereço |
+|---|---|
+| Swagger | [http://localhost:8080/swagger](http://localhost:8080/swagger) |
+| API | [http://localhost:8080](http://localhost:8080) |
+| Disponibilidade | [http://localhost:8080/health/live](http://localhost:8080/health/live) |
+| Prontidão e MySQL | [http://localhost:8080/health/ready](http://localhost:8080/health/ready) |
+
+### Comandos úteis
+
+```bash
+docker compose ps
+docker compose logs -f api
+docker compose logs -f mysql
+docker compose down
+```
+
+`docker compose down` mantém os dados do volume. Apagar o volume remove os dados locais do banco e não é necessário para reiniciar a aplicação.
+
+### Executar a API fora do Docker
+
+Com o MySQL em execução, configure `ConnectionStrings__Default` e `Jwt__SigningKey` no ambiente e rode:
+
+```bash
+dotnet run --project AlertaCidadao
+```
+
+O .NET não carrega automaticamente `.env` quando a API é iniciada diretamente pelo Visual Studio ou por `dotnet run`; configure as variáveis no ambiente de execução ou use o Compose.
+
+## Rotas da API
+
+As listas recebem `pagina` e `tamanhoPagina`. O tamanho é limitado a 100 itens.
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
+| `POST` | `/api/autenticacao/cadastro` | Público | Cadastra cidadão |
+| `POST` | `/api/autenticacao/entrar` | Público | Autentica e retorna JWT |
+| `GET` | `/api/cidadaos/eu` | Cidadão | Consulta o próprio cadastro |
+| `GET` | `/api/cidadaos` | Administrador | Lista cidadãos |
+| `GET`, `PUT` | `/api/cidadaos/{id}` | Proprietário ou administrador | Consulta e atualiza cadastro conforme autorização |
+| `DELETE` | `/api/cidadaos/{id}` | Administrador | Exclui cadastro sem registros associados |
+| `GET`, `POST`, `PUT`, `DELETE` | `/api/ocorrencias` | JWT | Cidadão gerencia as próprias ocorrências; administrador pode consultar e gerenciar registros |
+| `GET` | `/api/alertas-oficiais` | Público | Lista alertas externos; aceita filtros regionais e de evento |
+| `GET` | `/api/alertas-oficiais/{id}` | Público | Consulta alerta externo |
+| `POST`, `PUT`, `DELETE` | `/api/alertas-oficiais` | Administrador | Gerencia alertas externos |
+| `POST` | `/api/alertas-oficiais/sincronizar` | Administrador | Executa sincronização manual |
+| `GET`, `POST`, `PUT` | `/api/notificacoes` | JWT | Cidadão consulta e atualiza suas notificações; administrador pode gerenciar notificações |
+| `DELETE` | `/api/notificacoes/{id}` | Administrador | Exclui notificação |
+| `GET`, `POST`, `PUT`, `DELETE` | `/api/execucoes-monitoramento` | Administrador | Consulta e gerencia o histórico de execuções |
+
+`*` As permissões variam por operação: cidadãos acessam seus próprios dados; rotas administrativas exigem perfil `Administrador`. O Swagger mostra o cadeado por operação.
+
+### Exemplo: cadastrar cidadão
 
 ```http
 POST /api/autenticacao/cadastro
 Content-Type: application/json
 
-{"nome":"Ana Silva","email":"ana@example.com","senha":"senha-segura-123","municipio":"Campinas","codigoIbgeMunicipio":3509502,"bairro":"Centro","cep":"13010-000"}
+{
+  "nome": "Ana Silva",
+  "email": "ana@example.com",
+  "senha": "senha-segura-123",
+  "municipio": "Campinas",
+  "codigoIbgeMunicipio": 3509502,
+  "bairro": "Centro",
+  "cep": "13010-000"
+}
 ```
 
-Para criar ocorrência, use `Authorization: Bearer <token>` e uma chave única no cabeçalho `Chave-Idempotencia`. Repetir a chave e o mesmo conteúdo retorna a resposta original; reaproveitar a chave com conteúdo diferente retorna conflito. O limite padrão é 60 chamadas por minuto e o excesso retorna HTTP 429.
+### Exemplo: registrar ocorrência
 
-Para testar rotas administrativas, cadastre um cidadão e promova-o manualmente no banco: `UPDATE Citizens SET Role='Admin' WHERE Email='ana@example.com';` Depois faça login novamente para obter JWT com a role atualizada.
+Envie o token JWT e uma chave única no cabeçalho `Chave-Idempotencia`:
 
-## Integração e atribuição
+```http
+POST /api/ocorrencias
+Authorization: Bearer <token>
+Chave-Idempotencia: relato-rua-123
+Content-Type: application/json
 
-O único provider é RadarMeteorológico: `GET https://radarmeteorologico.com.br/api/v1/alertas?uf=SP`. Atualiza a cada 10 minutos por padrão. A origem é identificada como **INMET via RadarMeteorológico**, com [atribuição e documentação do serviço](https://radarmeteorologico.com.br/api-publica). O vínculo preventivo usa somente códigos IBGE efetivamente recebidos; não há inferência de bairros ou confirmação de ocorrência.
+{
+  "titulo": "Alagamento na via",
+  "descricao": "Água acumulada bloqueia uma faixa da rua.",
+  "tipo": "Alagamento",
+  "severidade": "Alta",
+  "municipio": "Campinas",
+  "bairro": "Centro",
+  "cep": "13010-000",
+  "latitude": null,
+  "longitude": null
+}
+```
 
-O RadarMeteorológico reproduz alertas do INMET, mas é um serviço intermediário sem garantia de disponibilidade. A API não depende dele para iniciar nem o trata como fonte única para segurança crítica.
+Repetir a mesma chave com o mesmo conteúdo reproduz a resposta original. Reutilizar a chave com conteúdo diferente retorna conflito. O registro de idempotência é persistido no MySQL.
+
+## Autenticação
+
+1. Cadastre-se em `POST /api/autenticacao/cadastro`.
+2. Faça login em `POST /api/autenticacao/entrar` com `email` e `senha`.
+3. No Swagger, clique em **Authorize** e cole o valor de `tokenAcesso` retornado pelo login.
+
+O cadastro cria o perfil `Cidadão`. Para promover uma conta a administrador em ambiente local, atualize a coluna interna no MySQL e faça login novamente para obter um token novo:
+
+```sql
+UPDATE Citizens
+SET Role = 'Admin'
+WHERE Email = 'ana@example.com';
+```
+
+O hash de senha não é retornado pela API. Não compartilhe tokens nem publique credenciais no repositório.
+
+## Monitoramento automático
+
+A API consulta exclusivamente o endpoint público do [RadarMeteorológico](https://radarmeteorologico.com.br/api-publica):
+
+```text
+GET https://radarmeteorologico.com.br/api/v1/alertas?uf=SP
+```
+
+O intervalo padrão é de 10 minutos e pode ser ajustado por `MONITORING_INTERVAL_MINUTES`. A origem é registrada como **INMET via RadarMeteorológico**: o RadarMeteorológico é um intermediário de terceiros que reproduz alertas originados do INMET; esta aplicação não chama diretamente a API do INMET.
+
+O vínculo preventivo utiliza códigos IBGE recebidos do serviço e presentes no cadastro do cidadão. A API não deduz bairro, endereço ou coordenadas ausentes na fonte. Notificações ficam salvas no banco; o envio por canais externos não faz parte desta versão.
 
 ## Testes
 
-```sh
+```bash
 dotnet test
 ```
 
-Os testes atuais usam respostas HTTP controladas para o provider, sem chamar a API pública, e verificam validação, hashing e configuração relacional. Para acrescentar testes de integração com o provider MySQL, disponibilize uma instância de teste separada antes de executar esses cenários.
+Os testes do provider usam respostas HTTP controladas e não dependem da disponibilidade do RadarMeteorológico.
 
-## Dependências principais
+## Estrutura do projeto
 
-- ASP.NET Core Minimal APIs / .NET 10.
-- EF Core 10.0.14 e `MySql.EntityFrameworkCore` 10.0.12 (provider Oracle/MySQL compatível com EF Core 10). O Pomelo estável consultado suporta EF Core 9; não misturar essas versões.
-- JWT Bearer, Swagger/OpenAPI, Rate Limiting e Health Checks.
+```text
+AlertaCidadao/
+├── Data/             # DbContext e configuração do EF Core
+├── Endpoints/        # Grupos de rotas Minimal API
+├── Entities/         # Entidades persistidas
+├── Models/           # DTOs de entrada e saída
+└── Services/         # Integração, idempotência e monitoramento
+AlertaCidadao.Tests/  # Testes xUnit
+docs/
+├── schema.sql        # DDL MySQL
+└── PLANO-TECNICO.md  # Plano técnico e critérios FIAP
+```
 
-O pacote `MySql.EntityFrameworkCore` declara licença GPL-2.0-only com Universal-FOSS exception; considere essa licença ao redistribuir o projeto.
+## Créditos e contexto acadêmico
 
-Consulte [o plano técnico](docs/PLANO-TECNICO.md) e o [DDL MySQL](docs/schema.sql).
+Desenvolvido pela **CivicShield Tech** para a **FIAP Global Solution 2026/2**, na disciplina **Advanced Business Development with .NET**.
+
+Os alertas externos são atribuídos ao [RadarMeteorológico](https://radarmeteorologico.com.br/api-publica), com referência à sua documentação pública.
