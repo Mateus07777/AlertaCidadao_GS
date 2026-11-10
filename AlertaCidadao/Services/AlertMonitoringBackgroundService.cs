@@ -24,7 +24,9 @@ public sealed class AlertSyncService(AlertaDbContext db, RadarMeteorologicoAlert
         var execution = new MonitoringExecution { StartedAt = DateTime.UtcNow, Status = "Running" }; db.MonitoringExecutions.Add(execution); await db.SaveChangesAsync(ct);
         try
         {
-            var incoming = await provider.GetAlertsAsync(ct); execution.RecordsFound = incoming.Count;
+            var consulta = await provider.GetAlertsAsync(ct);
+            var incoming = consulta.Alerts;
+            execution.RecordsFound = incoming.Count;
             foreach (var data in incoming)
             {
                 var codes = JsonSerializer.Serialize(data.Geocodes);
@@ -46,12 +48,14 @@ public sealed class AlertSyncService(AlertaDbContext db, RadarMeteorologicoAlert
                 }
                 await db.SaveChangesAsync(ct);
             }
-            execution.Status = "Succeeded";
+            execution.Status = consulta.FailedStates.Count == 0 ? "Succeeded" : "Partial";
+            if (consulta.FailedStates.Count > 0)
+                execution.ErrorMessage = $"Não foi possível consultar: {string.Join(", ", consulta.FailedStates)}.";
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { execution.Status = "Cancelled"; execution.ErrorMessage = "Execução cancelada."; throw; }
         catch (Exception ex) { execution.Status = "Failed"; execution.ErrorMessage = ex.Message[..Math.Min(ex.Message.Length, 4000)]; logger.LogError(ex, "Falha na execução de monitoramento {ExecutionId}", execution.Id); }
         finally { execution.FinishedAt = DateTime.UtcNow; await db.SaveChangesAsync(CancellationToken.None); }
-        var situacao = execution.Status switch { "Running" => "Em execução", "Succeeded" => "Concluída", "Failed" => "Falhou", "Cancelled" => "Cancelada", _ => execution.Status };
+        var situacao = execution.Status switch { "Running" => "Em execução", "Succeeded" => "Concluída", "Partial" => "Concluída parcialmente", "Failed" => "Falhou", "Cancelled" => "Cancelada", _ => execution.Status };
         logger.LogInformation("Monitoramento {ExecutionId} concluído: {Situacao}; encontrados={RecordsFound}, criados={RecordsCreated}, atualizados={RecordsUpdated}, duplicados={RecordsDuplicated}.", execution.Id, situacao, execution.RecordsFound, execution.RecordsCreated, execution.RecordsUpdated, execution.RecordsDuplicated);
         return execution;
     }

@@ -4,6 +4,7 @@ using System.Text;
 using AlertaCidadao.Data;
 using AlertaCidadao.Entities;
 using AlertaCidadao.Models;
+using AlertaCidadao.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -15,15 +16,30 @@ public static class AuthEndpoints
     public static RouteGroupBuilder MapAuthEndpoints(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/api/autenticacao").WithTags("Autenticação").RequireRateLimiting("publica");
-        group.MapPost("/cadastro", async (RegisterRequest request, AlertaDbContext db, IPasswordHasher<Citizen> hasher, CancellationToken ct) =>
+        group.MapPost("/cadastro", async (RegisterRequest request, AlertaDbContext db, MunicipalityCatalogService municipalities, IPasswordHasher<Citizen> hasher, CancellationToken ct) =>
         {
             var errors = EndpointHelpers.ValidateRegistration(request); if (errors.Count != 0) return Results.ValidationProblem(errors);
             var email = request.Email.Trim().ToLowerInvariant();
             if (await db.Citizens.AnyAsync(x => x.Email == email, ct)) return Results.Conflict(new { erro = "E-mail já cadastrado." });
-            var citizen = new Citizen { Name = request.Name.Trim(), Email = email, Municipality = request.Municipality.Trim(), MunicipalityIbgeCode = request.MunicipalityIbgeCode, Neighborhood = request.Neighborhood?.Trim(), PostalCode = request.PostalCode?.Trim() };
+            Municipality municipality;
+            try
+            {
+                municipality = await municipalities.ResolveAsync(request.Municipality, request.Uf, ct)
+                    ?? throw new ArgumentException("O município não foi encontrado na unidade federativa informada.");
+            }
+            catch (MunicipalityCatalogUnavailableException ex)
+            {
+                return Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Catálogo de municípios indisponível", detail: ex.Message);
+            }
+            catch (ArgumentException ex)
+            {
+                var campo = ex.ParamName == "uf" ? "uf" : "municipio";
+                return Results.ValidationProblem(new Dictionary<string, string[]> { [campo] = [ex.Message] });
+            }
+            var citizen = new Citizen { Name = request.Name.Trim(), Email = email, Municipality = municipality.Name, MunicipalityIbgeCode = municipality.IbgeCode, Neighborhood = request.Neighborhood?.Trim(), PostalCode = request.PostalCode?.Trim() };
             citizen.PasswordHash = hasher.HashPassword(citizen, request.Password); db.Citizens.Add(citizen);
             try { await db.SaveChangesAsync(ct); } catch (DbUpdateException) { return Results.Conflict(new { erro = "E-mail já cadastrado." }); }
-            return Results.Created($"/api/cidadaos/{citizen.Id}", EndpointHelpers.ToResponse(citizen));
+            return Results.Created($"/api/cidadaos/{citizen.Id}", EndpointHelpers.ToResponse(citizen, municipality.Uf));
         }).AllowAnonymous().WithSummary("Cadastra um cidadão");
         
         group.MapPost("/entrar", async (LoginRequest request, AlertaDbContext db, IPasswordHasher<Citizen> hasher, IConfiguration config, CancellationToken ct) =>

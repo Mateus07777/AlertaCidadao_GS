@@ -17,6 +17,14 @@ public sealed class Citizen
     public List<CitizenNotification> Notifications { get; set; } = [];
 }
 
+public sealed class Municipality
+{
+    public int IbgeCode { get; set; }
+    public string Name { get; set; } = "";
+    public string Uf { get; set; } = "";
+    public string NormalizedName { get; set; } = "";
+}
+
 public sealed class OfficialAlert
 {
     public int Id { get; set; }

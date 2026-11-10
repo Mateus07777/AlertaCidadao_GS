@@ -7,7 +7,7 @@ public sealed record RegisterRequest(
     [property: JsonPropertyName("email")] string Email,
     [property: JsonPropertyName("senha")] string Password,
     [property: JsonPropertyName("municipio")] string Municipality,
-    [property: JsonPropertyName("codigoIbgeMunicipio")] int? MunicipalityIbgeCode,
+    [property: JsonPropertyName("uf")] string Uf,
     [property: JsonPropertyName("bairro")] string? Neighborhood,
     [property: JsonPropertyName("cep")] string? PostalCode);
 
@@ -22,7 +22,7 @@ public sealed record AuthTokenResponse(
 public sealed record UpdateCitizenRequest(
     [property: JsonPropertyName("nome")] string Name,
     [property: JsonPropertyName("municipio")] string Municipality,
-    [property: JsonPropertyName("codigoIbgeMunicipio")] int? MunicipalityIbgeCode,
+    [property: JsonPropertyName("uf")] string Uf,
     [property: JsonPropertyName("bairro")] string? Neighborhood,
     [property: JsonPropertyName("cep")] string? PostalCode);
 
@@ -31,6 +31,7 @@ public sealed record CitizenResponse(
     [property: JsonPropertyName("nome")] string Name,
     [property: JsonPropertyName("email")] string Email,
     [property: JsonPropertyName("municipio")] string Municipality,
+    [property: JsonPropertyName("uf")] string? Uf,
     [property: JsonPropertyName("codigoIbgeMunicipio")] int? MunicipalityIbgeCode,
     [property: JsonPropertyName("bairro")] string? Neighborhood,
     [property: JsonPropertyName("cep")] string? PostalCode,

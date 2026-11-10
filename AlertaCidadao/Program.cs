@@ -30,6 +30,12 @@ builder.Services.AddHttpClient<RadarMeteorologicoAlertProvider>(client =>
     client.Timeout = TimeSpan.FromSeconds(15);
     client.DefaultRequestHeaders.UserAgent.ParseAdd("AlertaCidadao/1.0");
 });
+builder.Services.AddHttpClient<MunicipalityCatalogService>(client =>
+{
+    client.BaseAddress = new Uri("https://servicodados.ibge.gov.br/api/v1/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("AlertaCidadao/1.0");
+});
 builder.Services.Configure<MonitoringOptions>(builder.Configuration.GetSection("Monitoring"));
 builder.Services.AddHostedService<AlertMonitoringBackgroundService>();
 builder.Services.AddHealthChecks().AddDbContextCheck<AlertaDbContext>("bancoMySQL");
@@ -76,7 +82,7 @@ app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.Health
         await context.Response.WriteAsJsonAsync(new { situacao, verificacoes = report.Entries.ToDictionary(x => x.Key, x => x.Value.Status switch { Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy => "Saudável", Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Degraded => "Degradada", _ => "Indisponível" }) });
     }
 }).AllowAnonymous();
-app.MapAuthEndpoints(); app.MapCitizenEndpoints(); app.MapOccurrenceEndpoints(); app.MapAlertEndpoints(); app.MapNotificationEndpoints(); app.MapMonitoringEndpoints();
+app.MapMunicipalityEndpoints(); app.MapAuthEndpoints(); app.MapCitizenEndpoints(); app.MapOccurrenceEndpoints(); app.MapAlertEndpoints(); app.MapNotificationEndpoints(); app.MapMonitoringEndpoints();
 app.Run();
 
 public partial class Program;

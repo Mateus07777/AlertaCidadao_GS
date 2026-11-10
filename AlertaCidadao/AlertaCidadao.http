@@ -8,8 +8,12 @@ Accept: application/json
 GET {{AlertaCidadao_HostAddress}}/api/alertas-oficiais?pagina=1&tamanhoPagina=20
 Accept: application/json
 
+### Consultar municípios de uma UF para o cadastro
+GET {{AlertaCidadao_HostAddress}}/api/localidades/municipios?uf=SP
+Accept: application/json
+
 ### Cadastrar cidadão
 POST {{AlertaCidadao_HostAddress}}/api/autenticacao/cadastro
 Content-Type: application/json
 
-{"nome":"Ana Silva","email":"ana@example.com","senha":"senha-segura-123","municipio":"Campinas","codigoIbgeMunicipio":3509502,"bairro":"Centro","cep":"13010-000"}
+{"nome":"Ana Silva","email":"ana@example.com","senha":"senha-segura-123","municipio":"Campinas","uf":"SP","bairro":"Centro","cep":"13010-000"}

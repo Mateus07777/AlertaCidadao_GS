@@ -6,6 +6,7 @@ namespace AlertaCidadao.Data;
 public sealed class AlertaDbContext(DbContextOptions<AlertaDbContext> options) : DbContext(options)
 {
     public DbSet<Citizen> Citizens => Set<Citizen>();
+    public DbSet<Municipality> Municipalities => Set<Municipality>();
     public DbSet<OfficialAlert> OfficialAlerts => Set<OfficialAlert>();
     public DbSet<CitizenOccurrence> CitizenOccurrences => Set<CitizenOccurrence>();
     public DbSet<CitizenNotification> CitizenNotifications => Set<CitizenNotification>();
@@ -14,6 +15,7 @@ public sealed class AlertaDbContext(DbContextOptions<AlertaDbContext> options) :
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<Municipality>(e => { e.HasKey(x => x.IbgeCode); e.HasIndex(x => new { x.Uf, x.NormalizedName }).IsUnique(); e.Property(x => x.Name).HasMaxLength(120).IsRequired(); e.Property(x => x.Uf).HasColumnType("char(2)").IsRequired(); e.Property(x => x.NormalizedName).HasMaxLength(120).IsRequired(); });
         b.Entity<Citizen>(e => { e.HasIndex(x => x.Email).IsUnique(); e.Property(x => x.Email).HasMaxLength(254).IsRequired(); e.Property(x => x.Name).HasMaxLength(150).IsRequired(); e.Property(x => x.PasswordHash).HasMaxLength(512).IsRequired(); e.Property(x => x.Municipality).HasMaxLength(120).IsRequired(); e.Property(x => x.Role).HasMaxLength(20).IsRequired(); e.HasIndex(x => x.MunicipalityIbgeCode); });
         b.Entity<OfficialAlert>(e => { e.HasIndex(x => x.ExternalIdentifier).IsUnique(); e.HasIndex(x => new { x.MunicipalityIbgeCode, x.Severity }); e.Property(x => x.Title).HasMaxLength(200).IsRequired(); e.Property(x => x.EventType).HasMaxLength(100).IsRequired(); e.Property(x => x.Severity).HasMaxLength(40).IsRequired(); e.Property(x => x.Source).HasMaxLength(120).IsRequired(); e.Property(x => x.SourceUrl).HasMaxLength(300).IsRequired(); e.Property(x => x.AffectedMunicipalityCodes).HasColumnType("json").IsRequired(); });
         b.Entity<CitizenOccurrence>(e => { e.HasIndex(x => new { x.CitizenId, x.Status }); e.HasIndex(x => new { x.Municipality, x.Type, x.Severity }); e.Property(x => x.Title).HasMaxLength(200).IsRequired(); e.Property(x => x.Description).HasMaxLength(4000).IsRequired(); e.Property(x => x.Type).HasMaxLength(80).IsRequired(); e.Property(x => x.Severity).HasMaxLength(40).IsRequired(); e.Property(x => x.Status).HasMaxLength(30).IsRequired(); e.Property(x => x.Latitude).HasPrecision(10, 7); e.Property(x => x.Longitude).HasPrecision(10, 7); e.HasOne(x => x.Citizen).WithMany(x => x.Occurrences).HasForeignKey(x => x.CitizenId).OnDelete(DeleteBehavior.Restrict); });

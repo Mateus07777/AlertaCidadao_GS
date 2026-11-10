@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
   <img src="docs/alertacidadao-banner.svg" alt="AlertaCidadão — Riscos urbanos, informação confiável e prevenção local" width="100%" />
 
   <br />
@@ -40,7 +40,7 @@ O sistema mantém esses conceitos separados: **alerta externo é uma informaçã
 flowchart LR
     C["Cidadão"] -->|"registra ocorrência"| API["API AlertaCidadão"]
     API --> DB[("MySQL")]
-    JOB["Monitoramento a cada 10 min"] -->|"consulta alertas SP"| RADAR["RadarMeteorológico"]
+    JOB["Monitoramento a cada 10 min"] -->|"consulta as 27 UFs"| RADAR["RadarMeteorológico"]
     RADAR -->|"alertas externos"| JOB
     JOB -->|"deduplica e atualiza"| DB
     JOB -->|"código IBGE compatível"| N["Notificação preventiva"]
@@ -54,7 +54,7 @@ flowchart LR
 | API | C# e ASP.NET Core 10 com Minimal APIs |
 | Persistência | Entity Framework Core 10 e MySQL 8.4 |
 | Provider MySQL | `MySql.EntityFrameworkCore` 10.0.12 |
-| Integração externa | `HttpClient` com `IHttpClientFactory` |
+| Fontes externas | RadarMeteorológico para alertas e catálogo oficial de localidades do IBGE |
 | Segurança | JWT Bearer e hashing de senhas do ASP.NET Core Identity |
 | Documentação | Swagger e OpenAPI |
 | Execução local | Docker e Docker Compose |
@@ -84,6 +84,8 @@ docker compose up --build -d
 ```
 
 O Compose inicia o MySQL e aguarda a verificação de saúde TCP antes de iniciar a API. O script `docs/schema.sql` é aplicado automaticamente quando o volume do MySQL é inicializado pela primeira vez.
+
+Se o banco já tinha um volume persistente antes da inclusão do catálogo municipal, execute uma vez `docs/migrations/002-catalogo-municipios.sql` no DBeaver. O Compose não reaplica scripts de inicialização em volumes existentes.
 
 | Serviço | Endereço |
 |---|---|
@@ -121,6 +123,8 @@ As listas recebem `pagina` e `tamanhoPagina`. O tamanho é limitado a 100 itens.
 |---|---|---|---|
 | `POST` | `/api/autenticacao/cadastro` | Público | Cadastra cidadão |
 | `POST` | `/api/autenticacao/entrar` | Público | Autentica e retorna JWT |
+| `GET` | `/api/localidades/ufs` | Público | Lista as unidades federativas |
+| `GET` | `/api/localidades/municipios?uf=SP` | Público | Lista os municípios da UF informada |
 | `GET` | `/api/cidadaos/eu` | Cidadão | Consulta o próprio cadastro |
 | `GET` | `/api/cidadaos` | Administrador | Lista cidadãos |
 | `GET`, `PUT` | `/api/cidadaos/{id}` | Proprietário ou administrador | Consulta e atualiza cadastro conforme autorização |
@@ -147,7 +151,7 @@ Content-Type: application/json
   "email": "ana@example.com",
   "senha": "senha-segura-123",
   "municipio": "Campinas",
-  "codigoIbgeMunicipio": 3509502,
+  "uf": "SP",
   "bairro": "Centro",
   "cep": "13010-000"
 }
@@ -184,7 +188,9 @@ Repetir a mesma chave com o mesmo conteúdo reproduz a resposta original. Reutil
 2. Faça login em `POST /api/autenticacao/entrar` com `email` e `senha`.
 3. No Swagger, clique em **Authorize** e cole o valor de `tokenAcesso` retornado pelo login.
 
-O cadastro cria o perfil `Cidadão`. Para promover uma conta a administrador em ambiente local, atualize a coluna interna no MySQL e faça login novamente para obter um token novo:
+O cadastro cria o perfil `Cidadão`. A pessoa informa município e UF; a API busca o código correspondente no [catálogo oficial de localidades do IBGE](https://servicodados.ibge.gov.br/api/docs/localidades) e mantém esse mapeamento no MySQL. A primeira consulta de municípios de cada UF carrega seu catálogo; consultas seguintes usam os dados locais. O código não é exigido na entrada, mas é retornado como `codigoIbgeMunicipio` na resposta do perfil e nas respostas administrativas de cidadãos.
+
+Para promover uma conta a administrador em ambiente local, atualize a coluna interna no MySQL e faça login novamente para obter um token novo:
 
 ```sql
 UPDATE Citizens
@@ -199,12 +205,12 @@ O hash de senha não é retornado pela API. Não compartilhe tokens nem publique
 A API consulta exclusivamente o endpoint público do [RadarMeteorológico](https://radarmeteorologico.com.br/api-publica):
 
 ```text
-GET https://radarmeteorologico.com.br/api/v1/alertas?uf=SP
+GET https://radarmeteorologico.com.br/api/v1/alertas?uf={UF}
 ```
 
-O intervalo padrão é de 10 minutos e pode ser ajustado por `MONITORING_INTERVAL_MINUTES`. A origem é registrada como **INMET via RadarMeteorológico**: o RadarMeteorológico é um intermediário de terceiros que reproduz alertas originados do INMET; esta aplicação não chama diretamente a API do INMET.
+O monitoramento consulta sequencialmente as 27 UFs (uma requisição por estado) a cada 10 minutos por padrão; o intervalo pode ser ajustado por `MONITORING_INTERVAL_MINUTES`. Isso respeita o cache de 10 minutos informado pelo serviço e evita rajadas paralelas. A origem é registrada como **INMET via RadarMeteorológico**: o RadarMeteorológico é um intermediário de terceiros que reproduz alertas originados do INMET; esta aplicação não chama diretamente a API do INMET.
 
-O vínculo preventivo utiliza códigos IBGE recebidos do serviço e presentes no cadastro do cidadão. A API não deduz bairro, endereço ou coordenadas ausentes na fonte. Notificações ficam salvas no banco; o envio por canais externos não faz parte desta versão.
+O vínculo preventivo utiliza códigos IBGE recebidos do serviço e presentes no cadastro do cidadão. A API não deduz bairro, endereço ou coordenadas ausentes na fonte. Se uma ou mais UFs falharem, os demais resultados são processados e a execução fica marcada como concluída parcialmente. Notificações ficam salvas no banco; o envio por canais externos não faz parte desta versão.
 
 ## Testes
 
@@ -226,6 +232,7 @@ AlertaCidadao/
 AlertaCidadao.Tests/  # Testes xUnit
 docs/
 ├── schema.sql        # DDL MySQL
+├── migrations/       # Ajustes para bancos já inicializados
 └── PLANO-TECNICO.md  # Plano técnico e critérios FIAP
 ```
 
@@ -234,3 +241,4 @@ docs/
 Desenvolvido pela **CivicShield Tech** para a **FIAP Global Solution 2026/2**, na disciplina **Advanced Business Development with .NET**.
 
 Os alertas externos são atribuídos ao [RadarMeteorológico](https://radarmeteorologico.com.br/api-publica), com referência à sua documentação pública.
+

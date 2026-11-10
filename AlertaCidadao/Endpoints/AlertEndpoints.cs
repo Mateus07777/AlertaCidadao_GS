@@ -20,7 +20,7 @@ public static class AlertEndpoints
         
         g.MapGet("/{id:int}", async (int id, AlertaDbContext db, CancellationToken ct) => { var x = await db.OfficialAlerts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct); return x is null ? Results.NotFound() : Results.Ok(EndpointHelpers.ToResponse(x)); }).AllowAnonymous();
         
-        g.MapPost("/sincronizar", async (AlertSyncService sync, CancellationToken ct) => Results.Ok(await sync.RunAsync(ct))).RequireAuthorization("Administrador");
+        g.MapPost("/sincronizar", async (AlertSyncService sync, CancellationToken ct) => Results.Ok(EndpointHelpers.ToResponse(await sync.RunAsync(ct)))).RequireAuthorization("Administrador");
         
         g.MapPost("", async (OfficialAlertRequest request, AlertaDbContext db, CancellationToken ct) =>
         {

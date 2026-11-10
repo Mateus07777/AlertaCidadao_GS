@@ -2,6 +2,16 @@ CREATE DATABASE IF NOT EXISTS alerta_cidadao
   CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE alerta_cidadao;
 
+CREATE TABLE IF NOT EXISTS Municipalities (
+  IbgeCode INT NOT NULL,
+  Name VARCHAR(120) NOT NULL,
+  Uf CHAR(2) NOT NULL,
+  NormalizedName VARCHAR(120) NOT NULL,
+  PRIMARY KEY (IbgeCode),
+  UNIQUE KEY UX_Municipalities_Uf_NormalizedName (Uf, NormalizedName),
+  KEY IX_Municipalities_Name (Name)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS Citizens (
   Id INT NOT NULL AUTO_INCREMENT,
   Name VARCHAR(150) NOT NULL,

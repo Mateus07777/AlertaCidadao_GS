@@ -19,7 +19,8 @@ public sealed class ProviderAndValidationTests
         const string json = """{"fonte":"INMET — Instituto Nacional de Meteorologia","alertas":[{"id":56340,"evento":"Tempestade","severidade":"Perigo","nivel":2,"inicio":"2026-11-07 15:47","fim":"2026-11-07 23:59","futuro":false,"geocodes":[3509502,3550308]}]}""";
         var handler = new StaticHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) });
         var provider = new RadarMeteorologicoAlertProvider(new HttpClient(handler) { BaseAddress = new Uri("https://radarmeteorologico.com.br/") }, NullLogger<RadarMeteorologicoAlertProvider>.Instance);
-        var alerts = await provider.GetAlertsAsync(CancellationToken.None);
+        var result = await provider.GetAlertsAsync(CancellationToken.None);
+        var alerts = result.Alerts;
         Assert.Single(alerts); Assert.Equal(56340, alerts[0].Id); Assert.Equal("Tempestade", alerts[0].Evento); Assert.Equal(new[] { 3509502, 3550308 }, alerts[0].Geocodes);
     }
 
@@ -42,7 +43,8 @@ public sealed class ProviderAndValidationTests
     {
         const string json = """{"alertas":[{"id":42,"evento":"Chuva forte"}]}""";
         var provider = new RadarMeteorologicoAlertProvider(new HttpClient(new StaticHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) })) { BaseAddress = new Uri("https://radarmeteorologico.com.br/") }, NullLogger<RadarMeteorologicoAlertProvider>.Instance);
-        var alerts = await provider.GetAlertsAsync(CancellationToken.None);
+        var result = await provider.GetAlertsAsync(CancellationToken.None);
+        var alerts = result.Alerts;
         Assert.Single(alerts); Assert.Equal("Não informada", alerts[0].Severidade); Assert.Empty(alerts[0].Geocodes); Assert.Null(alerts[0].Inicio);
     }
 
@@ -56,8 +58,8 @@ public sealed class ProviderAndValidationTests
     [Fact]
     public void Registration_ValidatesRequiredFieldsAndPasswordLength()
     {
-        var errors = EndpointHelpers.ValidateRegistration(new RegisterRequest("", "invalid", "123", "", null, null, null));
-        Assert.Contains("name", errors.Keys); Assert.Contains("email", errors.Keys); Assert.Contains("password", errors.Keys); Assert.Contains("municipality", errors.Keys);
+        var errors = EndpointHelpers.ValidateRegistration(new RegisterRequest("", "invalid", "123", "", "", null, null));
+        Assert.Contains("nome", errors.Keys); Assert.Contains("email", errors.Keys); Assert.Contains("senha", errors.Keys); Assert.Contains("municipio", errors.Keys); Assert.Contains("uf", errors.Keys);
     }
 
     [Fact]
