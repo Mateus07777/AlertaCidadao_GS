@@ -36,9 +36,22 @@ builder.Services.AddHttpClient<MunicipalityCatalogService>(client =>
     client.Timeout = TimeSpan.FromSeconds(15);
     client.DefaultRequestHeaders.UserAgent.ParseAdd("AlertaCidadao/1.0");
 });
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient("radar-health", client =>
+{
+    client.BaseAddress = new Uri("https://radarmeteorologico.com.br/");
+    client.Timeout = TimeSpan.FromSeconds(4);
+});
+builder.Services.AddHttpClient("ibge-health", client =>
+{
+    client.BaseAddress = new Uri("https://servicodados.ibge.gov.br/api/v1/");
+    client.Timeout = TimeSpan.FromSeconds(4);
+});
 builder.Services.Configure<MonitoringOptions>(builder.Configuration.GetSection("Monitoring"));
 builder.Services.AddHostedService<AlertMonitoringBackgroundService>();
-builder.Services.AddHealthChecks().AddDbContextCheck<AlertaDbContext>("bancoMySQL");
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<AlertaDbContext>("bancoMySQL", tags: ["database"])
+    .AddCheck<ExternalServicesHealthCheck>("servicosExternos", tags: ["external"]);
 builder.Services.AddOpenApi();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(o =>
@@ -67,21 +80,45 @@ var app = builder.Build();
 app.UseExceptionHandler(e => e.Run(async c => { c.Response.StatusCode = 500; c.Response.ContentType = "application/problem+json"; await c.Response.WriteAsJsonAsync(new { title = "Erro interno", status = 500 }); }));
 app.UseRateLimiter(); app.UseAuthentication(); app.UseAuthorization();
 if (app.Environment.IsDevelopment()) { app.MapOpenApi(); app.UseSwagger(); app.UseSwaggerUI(); }
-app.MapGet("/health/live", () => Results.Ok(new { situacao = "Saudável" })).AllowAnonymous();
-app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+app.MapGet("/health/live", () => Results.Ok(new { situacao = "Saudável" }))
+    .AllowAnonymous().WithTags("Saúde").WithSummary("Verifica se a API está ativa")
+    .WithDescription("Verificação de liveness. Não consulta banco de dados nem integrações externas.")
+    .Produces(StatusCodes.Status200OK);
+app.MapGet("/health/ready", async (Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckService health, CancellationToken ct) =>
 {
-    ResponseWriter = async (context, report) =>
+    var report = await health.CheckHealthAsync(check => check.Tags.Contains("database"), ct);
+    var situacao = report.Status switch
     {
-        context.Response.ContentType = "application/json; charset=utf-8";
-        var situacao = report.Status switch
-        {
-            Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy => "Saudável",
-            Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Degraded => "Degradada",
-            _ => "Indisponível"
-        };
-        await context.Response.WriteAsJsonAsync(new { situacao, verificacoes = report.Entries.ToDictionary(x => x.Key, x => x.Value.Status switch { Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy => "Saudável", Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Degraded => "Degradada", _ => "Indisponível" }) });
-    }
-}).AllowAnonymous();
+        Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy => "Saudável",
+        Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Degraded => "Degradada",
+        _ => "Indisponível"
+    };
+    var verificacoes = report.Entries.ToDictionary(x => x.Key, x => x.Value.Status switch
+    {
+        Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy => "Saudável",
+        Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Degraded => "Degradada",
+        _ => "Indisponível"
+    });
+    return Results.Json(new { situacao, verificacoes }, statusCode: report.Status == Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy ? StatusCodes.Status503ServiceUnavailable : StatusCodes.Status200OK);
+})
+    .AllowAnonymous().WithTags("Saúde").WithSummary("Verifica a prontidão da API e do MySQL")
+    .WithDescription("Retorna HTTP 503 quando o banco de dados não estiver disponível.")
+    .Produces(StatusCodes.Status200OK).Produces(StatusCodes.Status503ServiceUnavailable);
+app.MapGet("/health/integrations", async (Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckService health, CancellationToken ct) =>
+{
+    var report = await health.CheckHealthAsync(check => check.Tags.Contains("external"), ct);
+    var situacao = report.Status switch
+    {
+        Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy => "Saudável",
+        Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Degraded => "Degradada",
+        _ => "Indisponível"
+    };
+    var verificacoes = report.Entries.ToDictionary(x => x.Key, x => x.Value.Description);
+    return Results.Json(new { situacao, verificacoes }, statusCode: report.Status == Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy ? StatusCodes.Status503ServiceUnavailable : StatusCodes.Status200OK);
+})
+    .AllowAnonymous().WithTags("Saúde").WithSummary("Verifica os serviços externos")
+    .WithDescription("Consulta o RadarMeteorológico e o catálogo de localidades do IBGE. A indisponibilidade externa não altera a prontidão do MySQL.")
+    .Produces(StatusCodes.Status200OK).Produces(StatusCodes.Status503ServiceUnavailable);
 app.MapMunicipalityEndpoints(); app.MapAuthEndpoints(); app.MapCitizenEndpoints(); app.MapOccurrenceEndpoints(); app.MapAlertEndpoints(); app.MapNotificationEndpoints(); app.MapMonitoringEndpoints();
 app.Run();
 

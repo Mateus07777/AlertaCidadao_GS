@@ -9,7 +9,7 @@ public static class MonitoringEndpoints
 {
     public static RouteGroupBuilder MapMonitoringEndpoints(this IEndpointRouteBuilder routes)
     {
-        var g = routes.MapGroup("/api/execucoes-monitoramento").WithTags("Execuções de monitoramento").RequireAuthorization("Administrador");
+        var g = routes.MapGroup("/api/execucoes-monitoramento").WithTags("Execuções de monitoramento").RequireAuthorization("Administrador").RequireRateLimiting("publica");
         
         g.MapGet("", async (int? pagina, int? tamanhoPagina, string? situacao, AlertaDbContext db, CancellationToken ct) => { var q = db.MonitoringExecutions.AsNoTracking().AsQueryable(); if (situacao is not null) q = q.Where(x => x.Status == EndpointHelpers.StoredExecutionStatus(situacao)); var pg = Math.Max(pagina ?? 1, 1); var size = Math.Clamp(tamanhoPagina ?? 20, 1, 100); var rows = await q.OrderByDescending(x => x.StartedAt).Skip((pg - 1) * size).Take(size).ToListAsync(ct); return Results.Ok(rows.Select(EndpointHelpers.ToResponse)); });
         

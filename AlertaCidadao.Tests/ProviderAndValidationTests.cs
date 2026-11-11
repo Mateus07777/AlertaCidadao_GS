@@ -71,6 +71,15 @@ public sealed class ProviderAndValidationTests
     }
 
     [Fact]
+    public void IdempotencyScope_IsIsolatedByCitizenAndOperation()
+    {
+        var first = IdempotencyService.ScopeKey(10, "POST:/api/ocorrencias", "request-1");
+        Assert.Equal(first, IdempotencyService.ScopeKey(10, "POST:/api/ocorrencias", "request-1"));
+        Assert.NotEqual(first, IdempotencyService.ScopeKey(11, "POST:/api/ocorrencias", "request-1"));
+        Assert.NotEqual(first, IdempotencyService.ScopeKey(10, "POST:/api/notificacoes", "request-1"));
+    }
+
+    [Fact]
     public void PasswordHasher_StoresVerifiableHashInsteadOfPlaintext()
     {
         var hasher = new PasswordHasher<Citizen>(); var citizen = new Citizen { Email = "test@example.com" };

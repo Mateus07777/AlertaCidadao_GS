@@ -6,7 +6,7 @@ public static class MunicipalityEndpoints
 {
     public static RouteGroupBuilder MapMunicipalityEndpoints(this IEndpointRouteBuilder routes)
     {
-        var group = routes.MapGroup("/api/localidades").WithTags("Localidades");
+        var group = routes.MapGroup("/api/localidades").WithTags("Localidades").RequireRateLimiting("publica");
 
         group.MapGet("/ufs", () => Results.Ok(MunicipalityCatalogService.GetStates()))
             .AllowAnonymous()

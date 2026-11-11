@@ -10,7 +10,7 @@ public static class CitizenEndpoints
 {
     public static RouteGroupBuilder MapCitizenEndpoints(this IEndpointRouteBuilder routes)
     {
-        var g = routes.MapGroup("/api/cidadaos").WithTags("Cidadãos").RequireAuthorization();
+        var g = routes.MapGroup("/api/cidadaos").WithTags("Cidadãos").RequireAuthorization().RequireRateLimiting("publica");
 
         g.MapGet("/eu", async (HttpContext c, AlertaDbContext db, CancellationToken ct) => await Get(EndpointHelpers.UserId(c.User), db, ct));
 

@@ -93,6 +93,7 @@ Se o banco já tinha um volume persistente antes da inclusão do catálogo munic
 | API | [http://localhost:8080](http://localhost:8080) |
 | Disponibilidade | [http://localhost:8080/health/live](http://localhost:8080/health/live) |
 | Prontidão e MySQL | [http://localhost:8080/health/ready](http://localhost:8080/health/ready) |
+| Integrações externas | [http://localhost:8080/health/integrations](http://localhost:8080/health/integrations) |
 
 ### Comandos úteis
 
@@ -219,6 +220,7 @@ dotnet test
 ```
 
 Os testes do provider usam respostas HTTP controladas e não dependem da disponibilidade do RadarMeteorológico.
+Os testes de integração sobem a API em memória com `WebApplicationFactory` e EF Core InMemory; exercitam autenticação JWT, autorização, criação idempotente de ocorrências, resposta HTTP 429 e Health Checks sem depender de MySQL, IBGE ou RadarMeteorológico.
 
 ## Estrutura do projeto
 

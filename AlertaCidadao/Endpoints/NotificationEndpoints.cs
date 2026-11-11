@@ -9,7 +9,7 @@ public static class NotificationEndpoints
 {
     public static RouteGroupBuilder MapNotificationEndpoints(this IEndpointRouteBuilder routes)
     {
-        var g = routes.MapGroup("/api/notificacoes").WithTags("Notificações preventivas").RequireAuthorization();
+        var g = routes.MapGroup("/api/notificacoes").WithTags("Notificações preventivas").RequireAuthorization().RequireRateLimiting("publica");
         
         g.MapGet("", async (HttpContext c, int? pagina, int? tamanhoPagina, string? situacao, AlertaDbContext db, CancellationToken ct) =>
         {
@@ -25,7 +25,7 @@ public static class NotificationEndpoints
             var citizenId = EndpointHelpers.IsAdmin(c.User) ? request.CitizenId : EndpointHelpers.UserId(c.User); if (!await db.OfficialAlerts.AnyAsync(x => x.Id == request.OfficialAlertId, ct)) return Results.NotFound(new { erro = "Alerta não encontrado." });
             if (await db.CitizenNotifications.AnyAsync(x => x.CitizenId == citizenId && x.OfficialAlertId == request.OfficialAlertId, ct)) return Results.Conflict(new { erro = "Notificação já existe para este alerta." });
             var x = new CitizenNotification { CitizenId = citizenId, OfficialAlertId = request.OfficialAlertId, Title = request.Title.Trim(), Message = request.Message.Trim(), Status = "Pending", CreatedAt = DateTime.UtcNow }; db.Add(x); await db.SaveChangesAsync(ct); return Results.Created($"/api/notificacoes/{x.Id}", EndpointHelpers.ToResponse(x));
-        }).RequireRateLimiting("publica");
+        });
         
         g.MapPut("/{id:int}", async (int id, UpdateNotificationRequest request, HttpContext c, AlertaDbContext db, CancellationToken ct) =>
         {

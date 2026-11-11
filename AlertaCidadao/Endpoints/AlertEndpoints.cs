@@ -10,7 +10,7 @@ public static class AlertEndpoints
 {
     public static RouteGroupBuilder MapAlertEndpoints(this IEndpointRouteBuilder routes)
     {
-        var g = routes.MapGroup("/api/alertas-oficiais").WithTags("Alertas meteorológicos externos");
+        var g = routes.MapGroup("/api/alertas-oficiais").WithTags("Alertas meteorológicos externos").RequireRateLimiting("publica");
         
         g.MapGet("", async (int? pagina, int? tamanhoPagina, int? codigoIbgeMunicipio, string? severidade, string? tipoEvento, AlertaDbContext db, CancellationToken ct) =>
         {

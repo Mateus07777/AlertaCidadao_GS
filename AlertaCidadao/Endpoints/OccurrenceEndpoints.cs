@@ -10,7 +10,7 @@ public static class OccurrenceEndpoints
 {
     public static RouteGroupBuilder MapOccurrenceEndpoints(this IEndpointRouteBuilder routes)
     {
-        var g = routes.MapGroup("/api/ocorrencias").WithTags("Ocorrências").RequireAuthorization();
+        var g = routes.MapGroup("/api/ocorrencias").WithTags("Ocorrências").RequireAuthorization().RequireRateLimiting("publica");
         
         g.MapGet("", async (HttpContext c, int? pagina, int? tamanhoPagina, string? situacao, AlertaDbContext db, CancellationToken ct) =>
         {
@@ -27,27 +27,31 @@ public static class OccurrenceEndpoints
         {
             var errors = EndpointHelpers.ValidateOccurrence(request); if (errors.Count != 0) return Results.ValidationProblem(errors);
             var key = c.Request.Headers["Chave-Idempotencia"].FirstOrDefault(); if (string.IsNullOrWhiteSpace(key) || key.Length > 100) return Results.BadRequest(new { erro = "Informe Chave-Idempotencia (até 100 caracteres)." });
-            var hash = EndpointHelpers.Hash(request); var prior = await idem.FindAsync(key, hash, ct); if (prior is not null) return Results.Content(prior.ResponseBody, "application/json", statusCode: prior.ResponseStatusCode);
-            if (await idem.KeyExistsAsync(key, ct)) return Results.Conflict(new { erro = "Chave já utilizada com outro conteúdo." });
-            var x = new CitizenOccurrence { CitizenId = EndpointHelpers.UserId(c.User), Title = request.Title.Trim(), Description = request.Description.Trim(), Type = request.Type.Trim(), Severity = request.Severity.Trim(), Municipality = request.Municipality.Trim(), Neighborhood = request.Neighborhood, PostalCode = request.PostalCode, Latitude = request.Latitude, Longitude = request.Longitude, Status = "Open", CreatedAt = DateTime.UtcNow };
-            var body = System.Text.Json.JsonSerializer.Serialize(EndpointHelpers.ToResponse(x));
+            var citizenId = EndpointHelpers.UserId(c.User);
+            var scopedKey = IdempotencyService.ScopeKey(citizenId, "POST:/api/ocorrencias", key);
+            var hash = EndpointHelpers.Hash(request); var prior = await idem.FindAsync(scopedKey, hash, ct); if (prior is not null) return Results.Content(prior.ResponseBody, "application/json", statusCode: prior.ResponseStatusCode);
+            if (await idem.KeyExistsAsync(scopedKey, ct)) return Results.Conflict(new { erro = "Chave já utilizada com outro conteúdo." });
+            var x = new CitizenOccurrence { CitizenId = citizenId, Title = request.Title.Trim(), Description = request.Description.Trim(), Type = request.Type.Trim(), Severity = request.Severity.Trim(), Municipality = request.Municipality.Trim(), Neighborhood = request.Neighborhood, PostalCode = request.PostalCode, Latitude = request.Latitude, Longitude = request.Longitude, Status = "Open", CreatedAt = DateTime.UtcNow };
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
             try
             {
+                await idem.RemoveExpiredAsync(scopedKey, ct);
                 db.Add(x);
-                db.IdempotencyRecords.Add(new IdempotencyRecord { IdempotencyKey = key, RequestHash = hash, ResponseStatusCode = 201, ResponseBody = body, CreatedAt = DateTime.UtcNow, ExpiresAt = DateTime.UtcNow.AddHours(24) });
+                await db.SaveChangesAsync(ct);
+                var body = System.Text.Json.JsonSerializer.Serialize(EndpointHelpers.ToResponse(x));
+                db.IdempotencyRecords.Add(new IdempotencyRecord { IdempotencyKey = scopedKey, RequestHash = hash, ResponseStatusCode = 201, ResponseBody = body, CreatedAt = DateTime.UtcNow, ExpiresAt = DateTime.UtcNow.AddHours(24) });
                 await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct);
                 return Results.Content(body, "application/json", statusCode: 201);
             }
             catch (DbUpdateException)
             {
                 await transaction.RollbackAsync(ct); db.ChangeTracker.Clear();
-                var concurrent = await idem.FindAsync(key, hash, ct);
+                var concurrent = await idem.FindAsync(scopedKey, hash, ct);
                 if (concurrent is not null) return Results.Content(concurrent.ResponseBody, "application/json", statusCode: concurrent.ResponseStatusCode);
-                if (await idem.KeyExistsAsync(key, ct)) return Results.Conflict(new { erro = "Chave já utilizada com outro conteúdo." });
+                if (await idem.KeyExistsAsync(scopedKey, ct)) return Results.Conflict(new { erro = "Chave já utilizada com outro conteúdo." });
                 throw;
             }
-        }).RequireRateLimiting("publica").WithSummary("Registra uma ocorrência; exige Chave-Idempotencia").WithDescription("Envie Chave-Idempotencia com até 100 caracteres. A mesma chave e o mesmo conteúdo reproduzem a resposta original por 24 horas.");
+        }).WithSummary("Registra uma ocorrência; exige Chave-Idempotencia").WithDescription("Envie Chave-Idempotencia com até 100 caracteres. A mesma chave e o mesmo conteúdo reproduzem a resposta original por 24 horas.");
         
         g.MapPut("/{id:int}", async (int id, UpdateOccurrenceRequest request, HttpContext c, AlertaDbContext db, CancellationToken ct) =>
         {
